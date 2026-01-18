@@ -1,17 +1,16 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "Symulator.h"
 #include <QMainWindow>
+#include "Symulator.h"
 #include "arxwindow.h"
+#include "qvalueaxis.h"
 
 #include <QTimer>
 
-#include <QtCharts/QLineSeries>
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
-
-
+#include <QtCharts/QLineSeries>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -26,8 +25,6 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
-
 
 private slots:
     void on_Sin_Button_clicked();
@@ -56,19 +53,17 @@ private slots:
 
     void on_START_Button_clicked();
 
-
-
     void on_Konf_ARX_Button_clicked();
 
-    void onStartClicked() {
-        symulator.krokSymulacji();                  // wykonaj krok symulacji
-
-        qDebug() << "k = " << symulator.getKrok();
-    }
-
+    void ustawARXDane(const std::vector<double>& a,
+                      const std::vector<double>& b,
+                      int opoznienie,
+                      double szum);
 
 
+    void on_STOP_Bttun_clicked();
 
+    void on_RESET_Button_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -85,13 +80,17 @@ private:
     QLineSeries *seriaRegulowana;
     QLineSeries *seriaZad;
 
+    QValueAxis *mainX;
+    QValueAxis *mainY;
 
-    QLineSeries *seriaY;      // y(k) → getWyjscie()
-    QLineSeries *seriaW;    // w(k) → getWartoscZadana()
+    QValueAxis *uchybX;
+    QValueAxis *uchybY;
+
+    QValueAxis *regX;
+    QValueAxis *regY;
+
 
     QTimer *timer;
-    double T;   // okres próbkowania [s]
-
-
+    double T; // okres próbkowania [s]
 };
 #endif // MAINWINDOW_H

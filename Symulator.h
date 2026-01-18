@@ -1,46 +1,74 @@
 #pragma once
 
+#include <QObject>
+#include <QTimer>
+#include <vector>
 #include "GeneratorSygnalu.h"
 #include "RegulatorPID.h"
 #include "ModelARX.h"
 #include "ProstyUAR.h"
 
-class SymulatorUAR
+class SymulatorUAR : public QObject
 {
+    Q_OBJECT
+
 private:
-    // ===== WARSTWA DANYCH =====
+    // WARSTWA DANYCH
     GeneratorSygnalu generator;
     RegulatorPID pid;
     ModelARX arx;
     ProstyUAR uar;
 
-    // ===== STAN SYMULACJI =====
-    int k;          // numer kroku
-    double w;       // wartość zadana
-    double e;       // uchyb
-    double u;       // sterowanie (PID)
-    double y;       // wyjście obiektu
+    // STAN SYMULACJI
+    int k;
+    double w, e, u, y;
+
+    // ZEGAR
+    bool symuluj;
+    int interwalMs;
+    QTimer timer;
 
 public:
-    // ===== KONSTRUKTOR =====
+    // KONSTRUKTOR - INLINE
     SymulatorUAR(const GeneratorSygnalu& gen,
                  const RegulatorPID& pid_,
-                 const ModelARX& arx_)
-        : generator(gen),
-          pid(pid_),
-          arx(arx_),
-          uar(arx, pid),
-          k(0),
-          w(0.0),
-          e(0.0),
-          u(0.0),
-          y(0.0)
-    {}
+                 const ModelARX& arx_,
+                 QObject* parent = nullptr)
+        : QObject(parent),
+        generator(gen),
+        pid(pid_),
+        arx(arx_),
+        uar(arx, pid),
+        symuluj(false),
+        k(0),
+        w(0.0),
+        e(0.0),
+        u(0.0),
+        y(0.0),
+        interwalMs(200)
+    {
+        timer.setInterval(interwalMs);
+        connect(&timer, &QTimer::timeout,
+                this, &SymulatorUAR::Tick);
+    }
 
+    // STEROWANIE SYMULACJĄ
+    void start()
+    {
+        symuluj = true;
+        if (!timer.isActive())
+            timer.start();
+    }
 
-    // ===== RESET =====
+    void stop()
+    {
+        symuluj = false;
+        timer.stop();
+    }
+
     void reset()
     {
+        stop();
         k = 0;
         w = e = u = y = 0.0;
         uar.reset();
@@ -54,32 +82,68 @@ public:
     void setGeneratorTRZ(double trz) { generator.ustawTRZ(trz); }
     void setGeneratorTT(int tt) { generator.ustawTT(tt); }
 
-    //  Regulator PID
+    void setGeneratorCzestotliwosc(double f) {
+        if (f > 0) setGeneratorTRZ(1.0 / f);
+    }
+
+    // Regulator PID
     void setPID_Kp(double kp) { pid.setKp(kp); }
     void setPID_Ti(double ti) { pid.setStalaCalk(ti); }
     void setPID_Td(double td) { pid.setTd(td); }
     void setPID_T(double t) { pid.setT(t); }
     void setPID_TypCalki(RegulatorPID::LiczCalk typ) { pid.setLiczCalk(typ); }
+
     // ARX
     void setARX(const std::vector<double>& a,
-            const std::vector<double>& b,
-            int opoznienie,
-            double szum)
-{
-    arx = ModelARX(a, b, opoznienie, szum);
-    reset();
-}
-
-    void krokSymulacji()
+                const std::vector<double>& b,
+                int opoznienie,
+                double szum)
     {
-        uar.krok(w, e, u, y, generator, k);
-        k++;
+        arx.ustawParametry(a, b, opoznienie, szum);
+        reset();
     }
 
-    int getKrok() const { return k; }
+    // Ręczny krok symulacji
+    void krokSymulacji()
+    {
+        if (symuluj)
+        {
+            uar.krok(w, e, u, y, generator, k);
+            k++;
+        }
+    }
 
-    double getWartoscZadana() const { return w; }   // w(k)
-    double getUchyb() const { return e; }           // e(k)
-    double getSterowanie() const { return u; }      // u(k)
-    double getWyjscie() const { return y; }         // y(k)
+    // GETTERY
+    int getKrok() const { return k; }
+    double getWartoscZadana() const { return w; }
+    double getUchyb() const { return e; }
+    double getSterowanie() const { return u; }
+    double getWyjscie() const { return y; }
+
+    int getInterwalMs() const { return interwalMs; }
+    void setInterwalMs(int ms)
+    {
+        if (ms < 1) ms = 1;
+        interwalMs = ms;
+        timer.setInterval(ms);
+    }
+
+    bool czysymuluj() const { return symuluj; }
+
+signals:
+    void krokWykonany(double w, double y, double e, double u, int k);
+
+private slots:
+    void Tick()
+    {
+        if (!symuluj) return;
+        uar.krok(w, e, u, y, generator, k);
+
+
+
+        emit krokWykonany(w, y, e, u, k); //emitujemy dane
+
+        k++;
+    }
 };
+
